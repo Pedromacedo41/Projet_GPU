@@ -18,7 +18,6 @@ int * rand_int_array(int size){
     return a;
 }
 
-
   
 /****************************************************
 Check solution for small dimensions 

@@ -57,11 +57,50 @@ int * merge_sequential(int * a, int* b, int modA, int modB){
     return sol;
 }
 
-
+// using global memory (gpu) . Not yet optimized, not testes
 __global__ void kernel_k(int * a, int* b, int * sol, int modA, int modB){
     int idx = threadIdx.x;
-}
+    int * K = new int[2]; 
+    int * P = new int[2]; 
+    int * Q = new int[2];
 
+    // initial setup
+    bool aux1 = (idx > modA);
+    K[0]= P[1] = aux1* (idx-modA);
+    K[1]= P[0] = aux1*modA + (1-aux1)*idx;
+
+    bool loop_bool = true;
+    while(loop_bool){
+        /*********************
+          set Q position after K or P move following binary search. 
+         ( P move 1 segment bellow Q or K move 1 segment above Q if break condition is not met yet)
+        *********************/
+        // mid distance between K and P 
+        int offset = abs(K[1]-P[1])/2; 
+        // midpoint in diagonal
+        Q[0]= K[0]+offset;
+        Q[1]=  K[1]-offset;
+        
+        /********************
+          P move one segment bellow Q in schema 1, 1  (bottom left = 1) 
+          K move one segment above Q in schema 0, 0 (upper right = 0 )
+          break condition: schema  0, 1 
+        *********************/
+        bool upper_right = (a[Q[1]-1] > b[Q[0]]);
+        bool bottom_left = (a[Q[1]] < b[Q[0]-1]);
+        // in break condition, tells if upper left is 0 or 1. 
+        bool from_upper_or_left = (a[Q[1]] <= b[Q[0]]);
+
+        P[1] = bottom_left*(Q[1]+1);
+        P[0] = bottom_left*(Q[0]-1);
+        K[1] = (!bottom_left)*(Q[1]-1);
+        K[0] = (!bottom_left)*(Q[0]+1);
+
+        // only really updates in schema 0,1 
+        sol[idx]+= upper_right* (!bottom_left) * (from_upper_or_left*a[Q[1]] + (!from_upper_or_left)*b[Q[0]]);
+        loop_bool =  upper_right* (!bottom_left);
+    }
+}
 
 
 int main(void){
