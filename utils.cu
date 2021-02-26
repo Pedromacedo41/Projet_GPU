@@ -18,6 +18,12 @@ int * rand_int_array(int size){
     return a;
 }
 
+
+  
+/****************************************************
+Check solution for small dimensions 
+using C++ libraries
+****************************************************/
 bool check_solution(int * sol, int *a, int * b, int modA, int modB){
     std::vector<int> a_v (a, a+modA);    
     std::vector<int> b_v (b, b+modB);
