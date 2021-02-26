@@ -13,9 +13,34 @@
 #include <algorithm>  
 #include <vector>
 #include "timer.h"
+#include <random>
+#include "utils.h"
 
 #define cl(x, v) memset((x), (v), sizeof(x))
 #define f(i, t) for(int (i) = 0; (i) < (t); (i)++)
+
+
+int * merge_sequential(int * a, int* b, int modA, int modB){
+    int *sol= new int[modA+modB-1];
+
+    int i=0, j = 0;
+    while((i+j)< (modA+modB)){
+        if(i>=modA){
+            sol[i+j]= b[j];
+            j++;
+
+        }else if (j >= modB || a[i] < b[j]) {
+            sol[i+j] = a[i];       // goes 
+            i++;
+        }else {
+            sol[i+j]= b[j];        // goes right
+            j++;
+        }
+
+    }
+
+    return sol;
+}
 
 
 __global__ void kernel_k(int * a, int* b, int modA, int modB){
@@ -24,62 +49,40 @@ __global__ void kernel_k(int * a, int* b, int modA, int modB){
 
 
 
-int * merge_path_cpu(int * a, int* b, int modA, int modB){
-    int *sol= new int[modA+modB-1];
-
-
-
-    return sol;
-}
-
-
-// non tested
-bool check_solution(int * sol, int *a, int * b, int modA, int modB){
-    std::vector<int> a_v (a, a+modA);    
-    std::vector<int> b_v (b, b+modB);
-
-    // concatenate vectors
-    a_v.insert(a_v.end(), b_v.begin(), b_v.end());   
-    
-    // sort with algorithms 
-    std::sort(a_v.begin(), a_v.end());
-
-    f(i, modA+modB){
-        if(sol[i]!= a_v[i]) return false;
-    }
-
-    return true;
-}
-
-
 int main(void){
     // cin and cout as fast as printf
 	std::ios_base::sync_with_stdio(false);
 
-    int * a, * b, * aGPU, * bGPU;
-    int d = 256;
-    int modA= 128 , modB = d-modA;
+    int d = 20;
+    int modA= 5 , modB = d-modA;
 
+    // random sorted vectors
+    int * a = rand_int_array(modA);
+    int * b = rand_int_array(modB);
 
-
-
+    f(i, modA){
+        std::cout<< a[i] << std::endl;
+    }
+    
     /****************************************************
-       Check solution for small dimensions 
-       using C++ libraries
+    Check solution for small dimensions 
+    using C++ libraries
     ****************************************************/
-    int * sol = merge_path_cpu(a, b, modA, modB);
+    
+    int * sol = merge_sequential(a, b, modA, modB);
+    
+    /*
+    f(i, modA){
+        std::cout<< sol[i] << std::endl;
+    }*/
 
     if(check_solution(sol, a, b, modA, modB)) std::cout << "Valid solution" << std::endl; 
     else std::cout << "Wrong solution" << std::endl;
-    
-    
-    /*
-    f(i, modA+modB-1){
-        std::cout << sol  
-    }*/
 
+    // memory free
     delete [] a;
     delete [] b;
+    delete [] sol;
 
     return 0; 
 }
