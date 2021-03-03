@@ -80,13 +80,13 @@ __global__ void kernel_k(int * a, int* b, int * sol, int modA, int modB){
         // midpoint in diagonal
         Q[0]= K[0]+offset;
         Q[1]=  K[1]-offset;
-        
+
         /********************
           P move one segment bellow Q in schema 1, 1  (bottom left = 1) 
           K move one segment above Q in schema 0, 0 (upper right = 0 )
           break condition: schema  0, 1 
         *********************/
-        bool upper_right = (a[Q[1]-1] > b[Q[0]]);
+        bool upper_right =       (  )   * !(a[Q[1]-1] > b[Q[0]]);
         bool bottom_left = (a[Q[1]] < b[Q[0]-1]);
         // in break condition, tells if upper left is 0 or 1. 
         bool from_upper_or_left = (a[Q[1]] <= b[Q[0]]);
