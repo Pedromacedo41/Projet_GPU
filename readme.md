@@ -1,6 +1,6 @@
 
 
-# Batch merge path sort 
+# Batch sort - Trifusion
 
    - Authors:  Pedro Macedo Flores and Hudson Braga Vieira 
 
@@ -16,11 +16,18 @@
  ### Command line 
 
 ```shell
-$ ./projet arg1 arg2
+$ ./projet d batch_dim
 ```
 
-#### Argurment list
 
-- **arg1:** arg description
+
+- **d:**  dimension of each vector of batch
+- **batch_dim:** batch_dim - batch dimension
+
+
+## File description 
+
+- **main.cu:** main file 
+- **utils.cu:** random vector generation and other useful functions
 
 
