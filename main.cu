@@ -150,9 +150,23 @@ void trifusion_test(void){
 }
 
 
-__global__ void kernel_batch_sort(int * M, int i){
+__global__ void kernel_batch_sort(int * M, int i, int mul, int d){
+    // which sort array?
+	int k = blockIdx.x/mul; 
 
+	// which sizes of A e B ? i
+	int size = std::pow(2,i);
 
+	// thread 2 from second block must represents thread 1025 of a virtual "superblock", where superblock is mul blocks together)
+	int intermediate_threadIdx =  (blockIdx.x % mul) * blockDim.x + threadIdx.x ;
+	
+	// which merge? find offset of M corresponding to A and B
+	int offset =   k*d +  intermediate_threadIdx;
+	int idx_start_a = offset + (i%2)*d;
+	int idx_start_b = idx_start_a + size;
+	int m =  intermediate_threadIdx % ((int) std::pow(2, (i+1)));
+
+    //trifusion(M+ idx_start_a, M+idx_start_b, M+offset+ !(i%2), size, size, m);
 }
 
 bool check_solution_batch(int *mCPU, int * mSOL,  int d, int batch_dim){
@@ -171,9 +185,7 @@ void cpu_batch_sort(int *mCPU, int d, int batch_dim){
        std::sort(&mCPU[2*d*i], &mCPU[2*d*i+d]);
     }
     timer.add();
-
     std::cout << "Elapsed CPU time: " << timer.getsum()*1000 << " ms" << std::endl << std::endl;
-
 }
 
 
@@ -190,6 +202,7 @@ void batch_sort(int d, int batch_dim, int max_threads_per_block){
     testCUDA(cudaMalloc(&mGPU,2*d*batch_dim*sizeof(int)));
     testCUDA(cudaMemcpy(mGPU,mCPU, 2*d*batch_dim*sizeof(int), cudaMemcpyHostToDevice));
     
+    // inplace sort. mCPU will be used in the future to compare sol from GPU
     cpu_batch_sort(mCPU, d , batch_dim);
     int mul = (d>max_threads_per_block)? (d / max_threads_per_block) : 1;
 
@@ -204,7 +217,7 @@ void batch_sort(int d, int batch_dim, int max_threads_per_block){
     // execution block
     f(i, log(d)){
         // for each vector to sort, 2**( log d - i -1) merges to do, each merge take 2**(i+1) threads  => always d threads on total 
-	    kernel_batch_sort<<< batch_dim*mul, (d > max_threads_per_block)? max_threads_per_block: d >>> (mGPU, i);
+	    kernel_batch_sort<<< batch_dim*mul, (d > max_threads_per_block)? max_threads_per_block: d >>> (mGPU, i, mul, d);
 	    cudaDeviceSynchronize();
     } 
     // execution block
@@ -224,6 +237,7 @@ void batch_sort(int d, int batch_dim, int max_threads_per_block){
     // memory free
     testCUDA(cudaFree(mGPU));
     delete [] mCPU;
+    delete [] mSOL;
 }
 
 
@@ -251,7 +265,7 @@ int main(int argc, char * argv[]){
 
         int mul = (d>prop.maxThreadsPerBlock)? (d / prop.maxThreadsPerBlock) : 1;
         if(mul*batch_dim > prop.multiProcessorCount){
-            std::cout << "WARNING: number of blocks greater than GPU SM count" << std::endl;
+            std::cout << "WARNING: number of blocks greater than GPU SM count" << std::endl << std::endl;
         }
     
         batch_sort(d,batch_dim, prop.maxThreadsPerBlock);
