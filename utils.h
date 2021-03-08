@@ -14,6 +14,7 @@
 #include <random>
 #include <iostream>
 # include "timer.h"
+#include <chrono>
 #define f(i, t) for(int (i) = 0; (i) < (t); (i)++)
 
 #define MIN 0
@@ -28,9 +29,6 @@ int * rand_int_array(int size);
 int isPowerOfTwo (unsigned int x);
 int * merge_sequential(int * a, int* b, int modA, int modB);
 void testCUDA(cudaError_t error, const char *file, int line);
-__device__ void trifusion(int * a, int* b, int * sol, int modA, int modB, int idx);
-__global__ void trifusion_kernel_test(int * a, int* b, int * sol, int modA, int modB);
-void trifusion_test(void);
 
 
 
