@@ -16,6 +16,15 @@
 // macros __FILE__ and __LINE__
 #define testCUDA(error) (testCUDA(error, __FILE__ , __LINE__))
 
+__device__ int pow(int b, int i){
+    int val = 1;
+    for (int j = 1; j <= i; j++){
+        val *= b;
+    }
+    return val;
+   
+   }
+
 
 __device__ void trifusion(int * a, int* b, int * sol, int modA, int modB, int idx){
     int * K = new int[2]; 
@@ -58,6 +67,9 @@ __device__ void trifusion(int * a, int* b, int * sol, int modA, int modB, int id
         sol[idx]= bottom_left * upper_right* (from_upper_or_left*a[Q[1]] + (!from_upper_or_left)*b[Q[0]]);
         loop_bool = !(upper_right* bottom_left);
     }
+delete [] K;
+delete [] P;
+delete [] Q;
 }
 
 __global__ void trifusion_kernel_test(int * a, int* b, int * sol, int modA, int modB){
@@ -162,16 +174,16 @@ __global__ void kernel_batch_sort(int * M, int i, int mul, int d){
 	int k = (int) blockIdx.x/mul; 
     //printf("%d\n", blockIdx.x % mul);
 	// which sizes of A e B ? 
-	int size = ((int) std::pow(2,i));
+	int size = ((int) pow(2,i));
 
 	// thread 2 from second block must represents thread 1025 of a virtual "superblock", where superblock is mul blocks together)
 	int intermediate_threadIdx =  (blockIdx.x % mul) * blockDim.x + threadIdx.x ;
 	
 	// which merge? find offset of M corresponding to A and B
-	int offset =   k*2*d +  (intermediate_threadIdx /((int) std::pow(2, (i+1)))) * std::pow(2, i+1);
+	int offset =   k*2*d +  (intermediate_threadIdx /((int) pow(2, (i+1)))) * pow(2, i+1);
 	int idx_start_a = offset + (i%2)*d;
 	int idx_start_b = idx_start_a + size;
-	int m =  intermediate_threadIdx % ((int) std::pow(2, (i+1)));
+	int m =  intermediate_threadIdx % ((int) pow(2, (i+1)));
 
     // device function
     trifusion(M+ idx_start_a, M+idx_start_b, M+offset + (!(i%2))*d, size, size, m);
@@ -184,7 +196,7 @@ void batch_sort(int d, int batch_dim, int max_threads_per_block){
     // A[batch_id][ 0, ... d//2] keeps old values and A[batch_id][d//2+1, ....d]  new ones or vice versa,  using i%2 trick 
     int * mCPU = rand_int_array(2*d*batch_dim);
     int * mSOL = new int[2*d*batch_dim];
-    memset(mSOL, 0, 2*d*sizeof(int));
+    //memset(mSOL, 0, 2*d*batch_dim*sizeof(int));
 
     f(i, batch_dim){
         memset(&mCPU[2*d*i+d], 0, d*sizeof(int));
