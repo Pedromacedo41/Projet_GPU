@@ -53,10 +53,10 @@ __device__ void trifusion(int * a, int* b, int * sol, int modA, int modB, int id
           K move one segment above Q in schema 0, 0 (upper right = 0 )
           break condition: schema  0, 1 
         *********************/
-        bool bottom_left =  (Q[1]>=0)*(Q[0] <= modB)*(!((a[Q[1]] <= b[Q[0]-1])*(Q[0] !=0)* (Q[1] != modA)));
-        bool upper_right =   !((Q[0]!= modB)* (Q[1]!=0) * (a[Q[1]-1] > b[Q[0]]));
+        bool bottom_left =  (Q[1]>=0)*(Q[0] <= modB)*(!((a[min(Q[1],modA-1)] <= b[max(Q[0]-1,0)])*(Q[0] !=0)* (Q[1] != modA)));
+        bool upper_right =   !((Q[0]!= modB)* (Q[1]!=0) * (a[max(Q[1]-1,0)] > b[min(Q[0],modB-1)]));
         // in break condition, tells if upper left is 0 or 1. 
-        bool from_upper_or_left =  (Q[1] < modA)* (!((Q[0]!=modB)*(a[Q[1]] > b[Q[0]])));
+        bool from_upper_or_left =  (Q[1] < modA)* (!((Q[0]!=modB)*(a[min(Q[1],modA-1)] > b[min(Q[0],modB-1)])));
 
         P[0] = (!bottom_left)*(Q[0]-1) + bottom_left*P[0];
         P[1] = (!bottom_left)*(Q[1]+1) + bottom_left*P[1];
@@ -64,7 +64,7 @@ __device__ void trifusion(int * a, int* b, int * sol, int modA, int modB, int id
         K[1] = bottom_left* (!upper_right) *(Q[1]-1) + (!(bottom_left* (!upper_right)))*K[1];
 
         // only really updates in schema 0,1 
-        sol[idx]= bottom_left * upper_right* (from_upper_or_left*a[Q[1]] + (!from_upper_or_left)*b[Q[0]]);
+        sol[idx]= bottom_left * upper_right* (from_upper_or_left*a[min(Q[1],modA-1)] + (!from_upper_or_left)*b[min(Q[0],modB-1)]);
         loop_bool = !(upper_right* bottom_left);
     }
 delete [] K;
@@ -169,6 +169,27 @@ void trifusion_test(void){
 }
 
 
+__global__ void kernel_batch_sort_shared(int *M, int i, int d){
+
+	int size = ((int) pow(2,i));
+
+    extern __shared__ int A[];
+
+	int offset =  (threadIdx.x /(2*size)) * 2*size;
+   
+
+    // device function
+
+    A[threadIdx.x+(i%2)*d]= M[threadIdx.x+(i%2)*d];
+    
+    __syncthreads();
+    trifusion(A+offset+(i%2)*d,A+offset+(i%2)*d+size, A+offset+(!(i%2))*d, size, size, threadIdx.x%(2*size));
+    
+    M[(!(i%2))*d + threadIdx.x]=A[threadIdx.x+(!(i%2))*d];
+
+}
+
+
 __global__ void kernel_batch_sort(int * M, int i, int mul, int d){
     // which sort array?
 	int k = (int) blockIdx.x/mul; 
@@ -189,18 +210,14 @@ __global__ void kernel_batch_sort(int * M, int i, int mul, int d){
     trifusion(M+ idx_start_a, M+idx_start_b, M+offset + (!(i%2))*d, size, size, m);
 }
 
-void batch_sort(int d, int batch_dim, int max_threads_per_block){
+void batch_sort(int d, int batch_dim, int max_threads_per_block,bool shared){
 
     // store on GPU a vectot M of size  2 * batch_dim * d
     // copy each vector j to A[j][0....d]  (setting 0 to  A[j][d+1, ...2d-1]
     // A[batch_id][ 0, ... d//2] keeps old values and A[batch_id][d//2+1, ....d]  new ones or vice versa,  using i%2 trick 
     int * mCPU = rand_int_array(2*d*batch_dim);
     int * mSOL = new int[2*d*batch_dim];
-    //memset(mSOL, 0, 2*d*batch_dim*sizeof(int));
 
-    f(i, batch_dim){
-        memset(&mCPU[2*d*i+d], 0, d*sizeof(int));
-    }
 
     // print result
     /*
@@ -221,6 +238,8 @@ void batch_sort(int d, int batch_dim, int max_threads_per_block){
     // timer block
     float TimeVar;
     cudaEvent_t start, stop;
+
+    if (shared){
     testCUDA(cudaEventCreate(&start));
     testCUDA(cudaEventCreate(&stop)); 
     testCUDA(cudaEventRecord(start,0));
@@ -229,7 +248,8 @@ void batch_sort(int d, int batch_dim, int max_threads_per_block){
     // execution block
     f(i, ((int) (log(d)/ log(2)))){
         // for each vector to sort, 2**( log d - i -1) merges to do, each merge take 2**(i+1) threads  => always d threads on total 
-	    kernel_batch_sort<<< batch_dim*mul, (d > max_threads_per_block)? max_threads_per_block: d >>> (mGPU, i, mul, d);
+	    //kernel_batch_sort<<< batch_dim*mul, (d > max_threads_per_block)? max_threads_per_block: d >>> (mGPU, i,mul, d);
+	    kernel_batch_sort_shared<<< 1, d ,2*d*sizeof(int)>>> (mGPU, i, d);
     } 
     // execution block
 
@@ -237,6 +257,26 @@ void batch_sort(int d, int batch_dim, int max_threads_per_block){
     testCUDA(cudaEventRecord(stop,0));
     testCUDA(cudaEventSynchronize(stop));
     testCUDA(cudaEventElapsedTime(&TimeVar, start, stop));
+    } else{
+testCUDA(cudaEventCreate(&start));
+    testCUDA(cudaEventCreate(&stop)); 
+    testCUDA(cudaEventRecord(start,0));
+    // timer block
+    
+    // execution block
+    f(i, ((int) (log(d)/ log(2)))){
+        // for each vector to sort, 2**( log d - i -1) merges to do, each merge take 2**(i+1) threads  => always d threads on total 
+	    kernel_batch_sort<<< batch_dim*mul, (d > max_threads_per_block)? max_threads_per_block: d >>> (mGPU, i,mul, d);
+	    //kernel_batch_sort_shared<<< batch_dim*mul, (d > max_threads_per_block)? max_threads_per_block: d ,2*d*sizeof(int)>>> (mGPU, i, d);
+    } 
+    // execution block
+
+    //timer block
+    testCUDA(cudaEventRecord(stop,0));
+    testCUDA(cudaEventSynchronize(stop));
+    testCUDA(cudaEventElapsedTime(&TimeVar, start, stop));
+    }
+    
     // timer block
 
     testCUDA(cudaMemcpy(mSOL, mGPU,  2*d*batch_dim*sizeof(int), cudaMemcpyDeviceToHost));
@@ -269,11 +309,20 @@ int main(int argc, char * argv[]){
     
     int d = 4;
     int batch_dim = 1;
+    bool shared = false;
 
     if(argc==3){
         d = std::stoi(argv[1]);
         batch_dim= std::stoi(argv[2]);
     }
+    if (d <= 1024 && batch_dim == 1){
+        char c;
+        printf("Use shared memory? (y/n): ");
+        scanf("%c", &c);
+        if (c=='y'){ 
+        shared = true;
+        }
+     }
 
     if(isPowerOfTwo(d)){
         // check the number of SM and the parameters given 
@@ -289,7 +338,7 @@ int main(int argc, char * argv[]){
             std::cout << "WARNING: number of blocks greater than GPU SM count" << std::endl << std::endl;
         }
     
-        batch_sort(d,batch_dim, prop.maxThreadsPerBlock);
+        batch_sort(d,batch_dim, prop.maxThreadsPerBlock,shared);
     }else{
         std::cout << "ABORTED: d is not power of 2" << std::endl;
     }

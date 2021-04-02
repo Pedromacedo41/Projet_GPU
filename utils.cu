@@ -12,6 +12,7 @@ void testCUDA(cudaError_t error, const char *file, int line)  {
         printf("There is an error in file %s at line %d, code %d \n", file, line, error);
         exit(EXIT_FAILURE);
 	} 
+  
 }
 // Has to be defined in the compilation in order to get the correct value of the 
 // macros __FILE__ and __LINE__

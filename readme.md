@@ -17,6 +17,7 @@
 
 ```shell
 $ ./projet d batch_dim
+if d <= 1024 and batch_dim = 1, the program will ask you if you want to use the proc's shared memory: Answer y/n.
 ```
 
 
